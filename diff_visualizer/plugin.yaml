@@ -1,0 +1,14 @@
+name: diff_visualizer
+version: "0.1.0"
+description: |
+  Renders unified-diff fenced code blocks as interactive, toggleable
+  (line-by-line / side-by-side) visual diffs in the chat UI. Includes a skill
+  that teaches the agent to emit valid unified diffs and a behavioral nudge
+  that encourages diff rendering for proposed changes and before/after views.
+
+author: "Omar Nahhas"
+license: Apache-2.0
+homepage: https://github.com/agent-zero-plugins/agent-zero-plugin-diff-visualizer
+per_project_config: false
+per_agent_config: false
+always_enabled: false

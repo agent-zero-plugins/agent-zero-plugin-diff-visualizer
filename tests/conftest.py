@@ -1,9 +1,10 @@
-"""pytest conftest for an agent-zero-plugins plugin source repo.
+"""pytest conftest for the diff_visualizer plugin source repo.
 
-Provides the `plugin_dir` fixture every a0_plugin_testkit assertion needs.
-Point it at this plugin's source directory.
+Provides the `plugin_dir` and `a0_root` fixtures the a0_plugin_testkit
+assertions need.
 """
 
+import os
 from pathlib import Path
 
 import pytest
@@ -11,13 +12,23 @@ import pytest
 
 @pytest.fixture(scope="session")
 def plugin_dir() -> Path:
-    """Path to this plugin's source directory.
+    """Path to this plugin's source directory."""
+    return Path(__file__).resolve().parent.parent / "diff_visualizer"
 
-    The testkit's assertions take this as their first argument:
-        assert_extension_at_surface(plugin_dir, ...)
-        assert_no_dead_plugin_hooks(plugin_dir)
-        etc.
+
+@pytest.fixture(scope="session")
+def a0_root() -> Path | None:
+    """Resolve an Agent Zero source checkout for surface-name validation.
+
+    The testkit validates webui surface names against A0's real surface list,
+    which requires the A0 source. Resolution order: ``$A0_ROOT``, then the
+    conventional ``/a0`` install path. Returns ``None`` if neither is present
+    so surface-validation tests can skip cleanly in a bare CI without A0.
     """
-    # Replace `my_plugin` with your plugin's directory name after cloning
-    # this template.
-    return Path(__file__).resolve().parent.parent / "my_plugin"
+    env = os.environ.get("A0_ROOT")
+    if env and (Path(env) / "agent.py").is_file():
+        return Path(env)
+    default = Path("/a0")
+    if (default / "agent.py").is_file():
+        return default
+    return None

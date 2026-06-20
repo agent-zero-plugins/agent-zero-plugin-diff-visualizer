@@ -1,7 +1,7 @@
 [project]
-name = "agent-zero-plugin-my-plugin"
+name = "agent-zero-plugin-diff-visualizer"
 version = "0.1.0"
-description = "Replace this — short description of what this plugin does."
+description = "Renders unified-diff code blocks as visual diffs in Agent Zero chat."
 requires-python = ">=3.11"
 
 # ── pytest ───────────────────────────────────────────────────────────────────

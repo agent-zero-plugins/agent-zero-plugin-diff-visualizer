@@ -1,0 +1,233 @@
+<html>
+<head><title>Diff Renderer</title></head>
+<body>
+<div style="display:none;"></div>
+
+<script type="module">
+import { html as diff2htmlHtml } from 'https://cdn.jsdelivr.net/npm/diff2html@3.4.51/+esm';
+
+// diff2html ships its own stylesheet; inject it once from the CDN.
+(function injectDiff2HtmlCss() {
+  if (document.getElementById('diff2html-css')) return;
+  const link = document.createElement('link');
+  link.id = 'diff2html-css';
+  link.rel = 'stylesheet';
+  link.href = 'https://cdn.jsdelivr.net/npm/diff2html@3.4.51/bundles/css/diff2html.min.css';
+  document.head.appendChild(link);
+})();
+
+let renderCounter = 0;
+
+function renderHtmlFor(source, format) {
+  return diff2htmlHtml(source, {
+    drawFileList: false,
+    matching: 'lines',
+    outputFormat: format, // 'line-by-line' | 'side-by-side'
+  });
+}
+
+function renderDiffBlock(codeEl) {
+  // Mark processed immediately to avoid re-entry from the observer.
+  codeEl.setAttribute('data-diff-processed', 'true');
+
+  const source = codeEl.textContent.replace(/\s+$/, '');
+  if (!source) return;
+
+  renderCounter++;
+
+  // Walk up to the outermost wrapper messages.js creates:
+  // code -> pre -> .code-block-wrapper -> .markdown-block-wrap
+  const pre = codeEl.parentElement;
+  const blockWrapper = pre.closest('.markdown-block-wrap')
+    || pre.closest('.code-block-wrapper')
+    || pre;
+
+  const container = document.createElement('div');
+  container.className = 'diff-visualizer-container';
+
+  let currentFormat = 'line-by-line';
+
+  let rendered;
+  try {
+    rendered = renderHtmlFor(source, currentFormat);
+  } catch {
+    rendered = '';
+  }
+
+  // Empty/failed render → leave the original block untouched (still readable).
+  if (!rendered || !rendered.includes('d2h-wrapper')) {
+    codeEl.removeAttribute('data-diff-processed');
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="diff-visualizer-toolbar">
+      <div class="diff-view-toggle">
+        <button class="diff-view-btn active" data-format="line-by-line" title="Line-by-line">Line-by-line</button>
+        <button class="diff-view-btn" data-format="side-by-side" title="Side-by-side">Side-by-side</button>
+      </div>
+      <button class="diff-copy-source" title="Copy raw diff">
+        <span class="material-symbols-outlined">content_copy</span>
+      </button>
+    </div>
+    <div class="diff-visualizer-rendered">${rendered}</div>
+  `;
+
+  const renderedHost = container.querySelector('.diff-visualizer-rendered');
+
+  // View-mode toggle: re-render with the other outputFormat.
+  container.querySelectorAll('.diff-view-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const format = btn.dataset.format;
+      if (format === currentFormat) return;
+      currentFormat = format;
+      try {
+        renderedHost.innerHTML = renderHtmlFor(source, format);
+      } catch {
+        /* keep previous render on failure */
+      }
+      container.querySelectorAll('.diff-view-btn').forEach((b) => {
+        b.classList.toggle('active', b.dataset.format === format);
+      });
+    });
+  });
+
+  // Copy raw diff to clipboard (with non-HTTPS fallback).
+  container.querySelector('.diff-copy-source').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(source);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = source;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+    }
+    const icon = container.querySelector('.diff-copy-source .material-symbols-outlined');
+    icon.textContent = 'check';
+    setTimeout(() => { icon.textContent = 'content_copy'; }, 2000);
+  });
+
+  blockWrapper.replaceWith(container);
+}
+
+function processDiffBlocks(root = document) {
+  const blocks = root.querySelectorAll(
+    'pre > code.language-diff:not([data-diff-processed])'
+  );
+  blocks.forEach(renderDiffBlock);
+}
+
+let debounceTimer = null;
+function debouncedProcess() {
+  if (debounceTimer) clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => processDiffBlocks(), 150);
+}
+
+const observer = new MutationObserver((mutations) => {
+  let hasNew = false;
+  for (const mutation of mutations) {
+    for (const node of mutation.addedNodes) {
+      if (node.nodeType !== Node.ELEMENT_NODE) continue;
+      if (node.querySelector && node.querySelector('code.language-diff:not([data-diff-processed])')) {
+        hasNew = true; break;
+      }
+      if (node.classList && node.classList.contains('language-diff') && !node.dataset.diffProcessed) {
+        hasNew = true; break;
+      }
+    }
+    if (hasNew) break;
+  }
+  if (hasNew) debouncedProcess();
+});
+
+observer.observe(document.body, { childList: true, subtree: true });
+processDiffBlocks();
+</script>
+
+<style>
+.diff-visualizer-container {
+  position: relative;
+  margin: 8px 0;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.diff-visualizer-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  background: rgba(0, 0, 0, 0.2);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.diff-view-toggle {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.diff-view-btn {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.3);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.diff-view-btn:hover {
+  background: rgba(0, 0, 0, 0.5);
+  color: white;
+}
+
+.diff-view-btn.active {
+  background: #89b4fa;
+  border-color: #89b4fa;
+  color: #1e1e2e;
+}
+
+.diff-copy-source {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.7);
+  padding: 0;
+  transition: all 0.2s ease;
+}
+
+.diff-copy-source:hover {
+  background: rgba(0, 0, 0, 0.5);
+  color: white;
+}
+
+.diff-copy-source .material-symbols-outlined { font-size: 16px; }
+
+.diff-visualizer-rendered {
+  overflow-x: auto;
+  font-size: 12px;
+}
+
+/* diff2html runs light by default; nudge it toward the dark chat theme. */
+.diff-visualizer-rendered .d2h-wrapper { background: transparent; }
+.diff-visualizer-rendered .d2h-file-header {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+.diff-visualizer-rendered .d2h-code-line,
+.diff-visualizer-rendered .d2h-code-side-line { color: #cdd6f4; }
+</style>
+</body>
+</html>

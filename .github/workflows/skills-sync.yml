@@ -27,11 +27,15 @@
 #                        `permissions:` block below grants it the minimum
 #                        scopes it needs.
 #
-# Required org-level secrets (set on this consumer's org, scoped to this
-# repo's consumer set):
+# Required REPO-level secrets on this consumer:
 #   SKILLS_SYNC_APP_CLIENT_ID     — the GitHub App's OAuth Client ID
 #                                   (format Iv23li…; NOT the numeric App ID)
 #   SKILLS_SYNC_APP_PRIVATE_KEY   — the App's PEM (full multi-line)
+#
+# Note: org-level secrets DO NOT REACH private repos on the GitHub free
+# plan — they're a paid-tier feature. We pay the cost of duplicating the
+# two secrets per consumer (one App ID + one PEM × N consumers) to keep
+# everything on free. To rotate, update all consumers in lock-step.
 #
 # The App must be installed on:
 #   - the skills repo (Contents: Read)
@@ -50,10 +54,14 @@ on:
 
 # Scopes granted to GITHUB_TOKEN (the runner's auto-issued, consumer-only
 # token). Used by the reusable workflow for:
-#   - contents: write     — push the chore/skills-sync branch
-#   - pull-requests: write — open / edit / auto-merge the sync PR
-# Nothing else gets through; GITHUB_TOKEN can't reach any other repo
-# regardless of the App's permissions.
+#   - contents: write       push the chore/skills-sync branch
+#   - pull-requests: write  open / edit / auto-merge the sync PR
+#
+# Note: GITHUB_TOKEN CANNOT push changes to .github/workflows/ — GitHub
+# hard-blocks this regardless of permissions. So the nightly sync only
+# refreshes skills/prompts/instructions/MCP/testkit, never the workflow
+# file itself. If the caller template needs updating (rare), do it as a
+# manual `make link-workflows` + PR.
 permissions:
   contents: write
   pull-requests: write
