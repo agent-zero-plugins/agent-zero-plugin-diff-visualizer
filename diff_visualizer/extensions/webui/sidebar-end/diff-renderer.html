@@ -41,93 +41,56 @@ function diff2htmlReady() {
 
 let renderCounter = 0;
 
-function renderHtmlFor(source, format) {
+// Side-by-side only (per design): no view toggle.
+function renderHtml(source) {
   return window.Diff2Html.html(source, {
     drawFileList: false,
     matching: 'lines',
-    outputFormat: format, // 'line-by-line' | 'side-by-side'
+    outputFormat: 'side-by-side',
   });
 }
 
-function buildToolbar(currentFormat, { withMaximize }) {
-  const maximizeBtn = withMaximize
-    ? `<button class="diff-maximize" title="Maximize"><span class="material-symbols-outlined">open_in_full</span></button>`
-    : '';
-  return `
-    <div class="diff-visualizer-toolbar">
-      <div class="diff-view-toggle">
-        <button class="diff-view-btn${currentFormat === 'line-by-line' ? ' active' : ''}" data-format="line-by-line" title="Line-by-line">Line-by-line</button>
-        <button class="diff-view-btn${currentFormat === 'side-by-side' ? ' active' : ''}" data-format="side-by-side" title="Side-by-side">Side-by-side</button>
-      </div>
-      <div class="diff-visualizer-actions">
-        ${maximizeBtn}
-        <button class="diff-copy-source" title="Copy raw diff">
-          <span class="material-symbols-outlined">content_copy</span>
-        </button>
-      </div>
-    </div>`;
-}
-
-// Wire the toggle + copy buttons inside a toolbar. `getFormat`/`setFormat` track
-// the active format for whichever surface (inline or overlay) this toolbar drives.
-function wireToolbar(scope, renderedHost, source, getFormat, setFormat) {
-  scope.querySelectorAll('.diff-view-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const format = btn.dataset.format;
-      if (format === getFormat()) return;
-      setFormat(format);
-      try {
-        renderedHost.innerHTML = renderHtmlFor(source, format);
-      } catch {
-        /* keep previous render on failure */
-      }
-      scope.querySelectorAll('.diff-view-btn').forEach((b) => {
-        b.classList.toggle('active', b.dataset.format === format);
-      });
-    });
-  });
-
+function wireCopy(scope, source) {
   const copyBtn = scope.querySelector('.diff-copy-source');
-  if (copyBtn) {
-    copyBtn.addEventListener('click', async () => {
-      try {
-        await navigator.clipboard.writeText(source);
-      } catch {
-        const ta = document.createElement('textarea');
-        ta.value = source;
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand('copy');
-        ta.remove();
-      }
-      const icon = copyBtn.querySelector('.material-symbols-outlined');
-      icon.textContent = 'check';
-      setTimeout(() => { icon.textContent = 'content_copy'; }, 2000);
-    });
-  }
+  if (!copyBtn) return;
+  copyBtn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(source);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = source;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+    }
+    const icon = copyBtn.querySelector('.material-symbols-outlined');
+    icon.textContent = 'check';
+    setTimeout(() => { icon.textContent = 'content_copy'; }, 2000);
+  });
 }
 
 // Fullscreen overlay for reviewing a diff with more space.
-function openMaximized(source, startFormat) {
+function openMaximized(source) {
   const existing = document.querySelector('.diff-visualizer-overlay');
   if (existing) existing.remove();
 
-  let fmt = startFormat || 'line-by-line';
   const overlay = document.createElement('div');
   overlay.className = 'diff-visualizer-overlay';
   overlay.innerHTML = `
     <div class="diff-visualizer-overlay-bar">
-      ${buildToolbar(fmt, { withMaximize: false }).replace('diff-visualizer-toolbar', 'diff-visualizer-toolbar diff-overlay-toolbar')}
-      <button class="diff-overlay-close" title="Close (Esc)"><span class="material-symbols-outlined">close</span></button>
+      <span class="diff-visualizer-label">Diff</span>
+      <div class="diff-visualizer-actions">
+        <button class="diff-copy-source" title="Copy raw diff"><span class="material-symbols-outlined">content_copy</span></button>
+        <button class="diff-overlay-close" title="Close (Esc)"><span class="material-symbols-outlined">close</span></button>
+      </div>
     </div>
     <div class="diff-visualizer-overlay-body">
-      <div class="diff-visualizer-rendered">${renderHtmlFor(source, fmt)}</div>
+      <div class="diff-visualizer-rendered">${renderHtml(source)}</div>
     </div>
   `;
   document.body.appendChild(overlay);
-
-  const renderedHost = overlay.querySelector('.diff-visualizer-rendered');
-  wireToolbar(overlay, renderedHost, source, () => fmt, (f) => { fmt = f; });
+  wireCopy(overlay, source);
 
   function close() {
     overlay.remove();
@@ -168,11 +131,9 @@ async function renderDiffBlock(codeEl) {
   const container = document.createElement('div');
   container.className = 'diff-visualizer-container';
 
-  let currentFormat = 'line-by-line';
-
   let rendered;
   try {
-    rendered = renderHtmlFor(source, currentFormat);
+    rendered = renderHtml(source);
   } catch {
     rendered = '';
   }
@@ -184,15 +145,18 @@ async function renderDiffBlock(codeEl) {
   }
 
   container.innerHTML = `
-    ${buildToolbar(currentFormat, { withMaximize: true })}
+    <div class="diff-visualizer-toolbar">
+      <span class="diff-visualizer-label">Diff</span>
+      <div class="diff-visualizer-actions">
+        <button class="diff-maximize" title="Maximize"><span class="material-symbols-outlined">open_in_full</span></button>
+        <button class="diff-copy-source" title="Copy raw diff"><span class="material-symbols-outlined">content_copy</span></button>
+      </div>
+    </div>
     <div class="diff-visualizer-rendered">${rendered}</div>
   `;
 
-  const renderedHost = container.querySelector('.diff-visualizer-rendered');
-  wireToolbar(container, renderedHost, source, () => currentFormat, (f) => { currentFormat = f; });
-
-  const maxBtn = container.querySelector('.diff-maximize');
-  if (maxBtn) maxBtn.addEventListener('click', () => openMaximized(source, currentFormat));
+  wireCopy(container, source);
+  container.querySelector('.diff-maximize').addEventListener('click', () => openMaximized(source));
 
   blockWrapper.replaceWith(container);
 }
@@ -253,27 +217,14 @@ processDiffBlocks();
   border-bottom: 1px solid var(--color-border, rgba(255, 255, 255, 0.12));
 }
 
-.diff-view-toggle { display: inline-flex; gap: 4px; }
+.diff-visualizer-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted, rgba(255, 255, 255, 0.5));
+}
+
 .diff-visualizer-actions { display: inline-flex; gap: 4px; }
-
-.diff-view-btn {
-  font-size: 12px;
-  padding: 4px 10px;
-  border-radius: 6px;
-  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.15));
-  background: transparent;
-  color: var(--color-text, rgba(255, 255, 255, 0.7));
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.diff-view-btn:hover { border-color: var(--color-primary, #89b4fa); }
-
-.diff-view-btn.active {
-  background: var(--color-primary, #89b4fa);
-  border-color: var(--color-primary, #89b4fa);
-  color: var(--color-message-bg, #1e1e2e);
-}
 
 .diff-maximize,
 .diff-copy-source,
@@ -310,14 +261,12 @@ processDiffBlocks();
 /* ── Theme-aware diff2html overrides: keep ALL text legible on any theme, and
       use translucent green/red so add/remove tints work over light or dark ── */
 .diff-visualizer-rendered .d2h-wrapper { background: transparent; }
+.diff-visualizer-rendered .d2h-tag { display: none; } /* hide CHANGED/ADDED/etc. file-header labels */
 .diff-visualizer-rendered .d2h-file-header {
   background: var(--color-message-bg, rgba(255, 255, 255, 0.04));
   border-color: var(--color-border, rgba(255, 255, 255, 0.12));
 }
-.diff-visualizer-rendered .d2h-file-name,
-.diff-visualizer-rendered .d2h-tag { color: var(--color-text, #cdd6f4); }
-.diff-visualizer-rendered .d2h-file-list-header,
-.diff-visualizer-rendered .d2h-file-list-title { color: var(--color-text, #cdd6f4); }
+.diff-visualizer-rendered .d2h-file-name { color: var(--color-text, #cdd6f4); }
 .diff-visualizer-rendered .d2h-diff-table { background: transparent; }
 .diff-visualizer-rendered .d2h-code-line,
 .diff-visualizer-rendered .d2h-code-side-line,
@@ -334,8 +283,6 @@ processDiffBlocks();
 }
 .diff-visualizer-rendered .d2h-cntx { background: transparent; }
 .diff-visualizer-rendered .d2h-ins { background: rgba(46, 160, 67, 0.15); }
-.diff-visualizer-rendered .d2h-ins .d2h-code-line-prefix,
-.diff-visualizer-rendered .d2h-ins.d2h-change { color: inherit; }
 .diff-visualizer-rendered .d2h-del { background: rgba(248, 81, 73, 0.15); }
 .diff-visualizer-rendered .d2h-code-line ins,
 .diff-visualizer-rendered .d2h-code-side-line ins {
@@ -373,12 +320,6 @@ processDiffBlocks();
   background: var(--color-panel, rgba(30, 30, 46, 0.95));
   border-bottom: 1px solid var(--color-border, rgba(255, 255, 255, 0.12));
   flex-shrink: 0;
-}
-.diff-visualizer-overlay-bar .diff-overlay-toolbar {
-  border-bottom: none;
-  background: transparent;
-  padding: 0;
-  flex: 1;
 }
 
 .diff-visualizer-overlay-body {

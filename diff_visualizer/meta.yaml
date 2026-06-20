@@ -1,4 +1,4 @@
 name: diff_visualizer
-version: "0.1.1"
-summary: Renders unified-diff code blocks as interactive line-by-line / side-by-side visual diffs in chat, with agent skill and behavioral nudges.
+version: "0.1.2"
+summary: Renders unified-diff code blocks as side-by-side visual diffs in chat (with a maximize view), plus an agent skill and behavioral nudges.
 env: []

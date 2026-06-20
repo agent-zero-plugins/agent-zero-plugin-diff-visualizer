@@ -16,8 +16,8 @@ triggers:
 # Diff Visualizer Skill
 
 Show file changes by emitting a **unified diff** in a fenced code block. The chat UI
-renders it as an interactive visual diff (line-by-line by default, with a side-by-side
-toggle and a copy-raw button).
+renders it as a side-by-side visual diff, with a maximize view for large diffs and a
+copy-raw button.
 
 ## Output Format
 
