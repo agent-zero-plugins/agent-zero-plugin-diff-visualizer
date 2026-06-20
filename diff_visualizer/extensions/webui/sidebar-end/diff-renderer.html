@@ -49,6 +49,98 @@ function renderHtmlFor(source, format) {
   });
 }
 
+function buildToolbar(currentFormat, { withMaximize }) {
+  const maximizeBtn = withMaximize
+    ? `<button class="diff-maximize" title="Maximize"><span class="material-symbols-outlined">open_in_full</span></button>`
+    : '';
+  return `
+    <div class="diff-visualizer-toolbar">
+      <div class="diff-view-toggle">
+        <button class="diff-view-btn${currentFormat === 'line-by-line' ? ' active' : ''}" data-format="line-by-line" title="Line-by-line">Line-by-line</button>
+        <button class="diff-view-btn${currentFormat === 'side-by-side' ? ' active' : ''}" data-format="side-by-side" title="Side-by-side">Side-by-side</button>
+      </div>
+      <div class="diff-visualizer-actions">
+        ${maximizeBtn}
+        <button class="diff-copy-source" title="Copy raw diff">
+          <span class="material-symbols-outlined">content_copy</span>
+        </button>
+      </div>
+    </div>`;
+}
+
+// Wire the toggle + copy buttons inside a toolbar. `getFormat`/`setFormat` track
+// the active format for whichever surface (inline or overlay) this toolbar drives.
+function wireToolbar(scope, renderedHost, source, getFormat, setFormat) {
+  scope.querySelectorAll('.diff-view-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const format = btn.dataset.format;
+      if (format === getFormat()) return;
+      setFormat(format);
+      try {
+        renderedHost.innerHTML = renderHtmlFor(source, format);
+      } catch {
+        /* keep previous render on failure */
+      }
+      scope.querySelectorAll('.diff-view-btn').forEach((b) => {
+        b.classList.toggle('active', b.dataset.format === format);
+      });
+    });
+  });
+
+  const copyBtn = scope.querySelector('.diff-copy-source');
+  if (copyBtn) {
+    copyBtn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(source);
+      } catch {
+        const ta = document.createElement('textarea');
+        ta.value = source;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+      }
+      const icon = copyBtn.querySelector('.material-symbols-outlined');
+      icon.textContent = 'check';
+      setTimeout(() => { icon.textContent = 'content_copy'; }, 2000);
+    });
+  }
+}
+
+// Fullscreen overlay for reviewing a diff with more space.
+function openMaximized(source, startFormat) {
+  const existing = document.querySelector('.diff-visualizer-overlay');
+  if (existing) existing.remove();
+
+  let fmt = startFormat || 'line-by-line';
+  const overlay = document.createElement('div');
+  overlay.className = 'diff-visualizer-overlay';
+  overlay.innerHTML = `
+    <div class="diff-visualizer-overlay-bar">
+      ${buildToolbar(fmt, { withMaximize: false }).replace('diff-visualizer-toolbar', 'diff-visualizer-toolbar diff-overlay-toolbar')}
+      <button class="diff-overlay-close" title="Close (Esc)"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <div class="diff-visualizer-overlay-body">
+      <div class="diff-visualizer-rendered">${renderHtmlFor(source, fmt)}</div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const renderedHost = overlay.querySelector('.diff-visualizer-rendered');
+  wireToolbar(overlay, renderedHost, source, () => fmt, (f) => { fmt = f; });
+
+  function close() {
+    overlay.remove();
+    window.removeEventListener('keydown', esc);
+  }
+  function esc(e) { if (e.key === 'Escape') close(); }
+  overlay.querySelector('.diff-overlay-close').addEventListener('click', close);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  window.addEventListener('keydown', esc);
+
+  requestAnimationFrame(() => overlay.classList.add('active'));
+}
+
 async function renderDiffBlock(codeEl) {
   // Mark processed immediately to avoid re-entry from the observer.
   codeEl.setAttribute('data-diff-processed', 'true');
@@ -92,53 +184,15 @@ async function renderDiffBlock(codeEl) {
   }
 
   container.innerHTML = `
-    <div class="diff-visualizer-toolbar">
-      <div class="diff-view-toggle">
-        <button class="diff-view-btn active" data-format="line-by-line" title="Line-by-line">Line-by-line</button>
-        <button class="diff-view-btn" data-format="side-by-side" title="Side-by-side">Side-by-side</button>
-      </div>
-      <button class="diff-copy-source" title="Copy raw diff">
-        <span class="material-symbols-outlined">content_copy</span>
-      </button>
-    </div>
+    ${buildToolbar(currentFormat, { withMaximize: true })}
     <div class="diff-visualizer-rendered">${rendered}</div>
   `;
 
   const renderedHost = container.querySelector('.diff-visualizer-rendered');
+  wireToolbar(container, renderedHost, source, () => currentFormat, (f) => { currentFormat = f; });
 
-  // View-mode toggle: re-render with the other outputFormat.
-  container.querySelectorAll('.diff-view-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const format = btn.dataset.format;
-      if (format === currentFormat) return;
-      currentFormat = format;
-      try {
-        renderedHost.innerHTML = renderHtmlFor(source, format);
-      } catch {
-        /* keep previous render on failure */
-      }
-      container.querySelectorAll('.diff-view-btn').forEach((b) => {
-        b.classList.toggle('active', b.dataset.format === format);
-      });
-    });
-  });
-
-  // Copy raw diff to clipboard (with non-HTTPS fallback).
-  container.querySelector('.diff-copy-source').addEventListener('click', async () => {
-    try {
-      await navigator.clipboard.writeText(source);
-    } catch {
-      const ta = document.createElement('textarea');
-      ta.value = source;
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand('copy');
-      ta.remove();
-    }
-    const icon = container.querySelector('.diff-copy-source .material-symbols-outlined');
-    icon.textContent = 'check';
-    setTimeout(() => { icon.textContent = 'content_copy'; }, 2000);
-  });
+  const maxBtn = container.querySelector('.diff-maximize');
+  if (maxBtn) maxBtn.addEventListener('click', () => openMaximized(source, currentFormat));
 
   blockWrapper.replaceWith(container);
 }
@@ -178,12 +232,14 @@ processDiffBlocks();
 </script>
 
 <style>
+/* ── Container + toolbar (theme-aware: inherits A0's resolved --color-* vars,
+      with fallbacks so it still renders standalone / in any theme) ── */
 .diff-visualizer-container {
   position: relative;
   margin: 8px 0;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--color-panel, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.12));
   overflow: hidden;
 }
 
@@ -193,72 +249,144 @@ processDiffBlocks();
   justify-content: space-between;
   gap: 8px;
   padding: 6px 10px;
-  background: rgba(0, 0, 0, 0.2);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--color-message-bg, rgba(0, 0, 0, 0.2));
+  border-bottom: 1px solid var(--color-border, rgba(255, 255, 255, 0.12));
 }
 
-.diff-view-toggle {
-  display: inline-flex;
-  gap: 4px;
-}
+.diff-view-toggle { display: inline-flex; gap: 4px; }
+.diff-visualizer-actions { display: inline-flex; gap: 4px; }
 
 .diff-view-btn {
   font-size: 12px;
   padding: 4px 10px;
   border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  background: rgba(0, 0, 0, 0.3);
-  color: rgba(255, 255, 255, 0.7);
+  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.15));
+  background: transparent;
+  color: var(--color-text, rgba(255, 255, 255, 0.7));
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
-.diff-view-btn:hover {
-  background: rgba(0, 0, 0, 0.5);
-  color: white;
-}
+.diff-view-btn:hover { border-color: var(--color-primary, #89b4fa); }
 
 .diff-view-btn.active {
-  background: #89b4fa;
-  border-color: #89b4fa;
-  color: #1e1e2e;
+  background: var(--color-primary, #89b4fa);
+  border-color: var(--color-primary, #89b4fa);
+  color: var(--color-message-bg, #1e1e2e);
 }
 
-.diff-copy-source {
+.diff-maximize,
+.diff-copy-source,
+.diff-overlay-close {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 28px;
   height: 28px;
   border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.15));
+  background: transparent;
   cursor: pointer;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--color-text, rgba(255, 255, 255, 0.7));
   padding: 0;
+  overflow: hidden; /* clip the icon glyph so a missing-font fallback can't overflow onto siblings */
   transition: all 0.2s ease;
 }
 
-.diff-copy-source:hover {
-  background: rgba(0, 0, 0, 0.5);
-  color: white;
-}
+.diff-maximize:hover,
+.diff-copy-source:hover,
+.diff-overlay-close:hover { border-color: var(--color-primary, #89b4fa); }
 
-.diff-copy-source .material-symbols-outlined { font-size: 16px; }
+.diff-maximize .material-symbols-outlined,
+.diff-copy-source .material-symbols-outlined,
+.diff-overlay-close .material-symbols-outlined { font-size: 16px; }
 
 .diff-visualizer-rendered {
   overflow-x: auto;
   font-size: 12px;
+  color: var(--color-text, #cdd6f4);
 }
 
-/* diff2html runs light by default; nudge it toward the dark chat theme. */
+/* ── Theme-aware diff2html overrides: keep ALL text legible on any theme, and
+      use translucent green/red so add/remove tints work over light or dark ── */
 .diff-visualizer-rendered .d2h-wrapper { background: transparent; }
 .diff-visualizer-rendered .d2h-file-header {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.08);
+  background: var(--color-message-bg, rgba(255, 255, 255, 0.04));
+  border-color: var(--color-border, rgba(255, 255, 255, 0.12));
 }
+.diff-visualizer-rendered .d2h-file-name,
+.diff-visualizer-rendered .d2h-tag { color: var(--color-text, #cdd6f4); }
+.diff-visualizer-rendered .d2h-file-list-header,
+.diff-visualizer-rendered .d2h-file-list-title { color: var(--color-text, #cdd6f4); }
+.diff-visualizer-rendered .d2h-diff-table { background: transparent; }
 .diff-visualizer-rendered .d2h-code-line,
-.diff-visualizer-rendered .d2h-code-side-line { color: #cdd6f4; }
+.diff-visualizer-rendered .d2h-code-side-line,
+.diff-visualizer-rendered .d2h-code-line-ctn { color: var(--color-text, #cdd6f4); }
+.diff-visualizer-rendered .d2h-code-linenumber,
+.diff-visualizer-rendered .d2h-code-side-linenumber {
+  color: var(--color-text-muted, rgba(255, 255, 255, 0.5));
+  background: var(--color-panel, transparent);
+  border-color: var(--color-border, rgba(255, 255, 255, 0.12));
+}
+.diff-visualizer-rendered .d2h-info {
+  background: var(--color-message-bg, rgba(255, 255, 255, 0.04));
+  color: var(--color-text-muted, rgba(255, 255, 255, 0.5));
+}
+.diff-visualizer-rendered .d2h-cntx { background: transparent; }
+.diff-visualizer-rendered .d2h-ins { background: rgba(46, 160, 67, 0.15); }
+.diff-visualizer-rendered .d2h-ins .d2h-code-line-prefix,
+.diff-visualizer-rendered .d2h-ins.d2h-change { color: inherit; }
+.diff-visualizer-rendered .d2h-del { background: rgba(248, 81, 73, 0.15); }
+.diff-visualizer-rendered .d2h-code-line ins,
+.diff-visualizer-rendered .d2h-code-side-line ins {
+  background: rgba(46, 160, 67, 0.4); text-decoration: none;
+}
+.diff-visualizer-rendered .d2h-code-line del,
+.diff-visualizer-rendered .d2h-code-side-line del {
+  background: rgba(248, 81, 73, 0.4); text-decoration: none;
+}
+.diff-visualizer-rendered .d2h-emptyplaceholder,
+.diff-visualizer-rendered .d2h-code-side-emptyplaceholder {
+  background: var(--color-panel, transparent);
+  border-color: var(--color-border, rgba(255, 255, 255, 0.12));
+}
+
+/* ── Maximize overlay ── */
+.diff-visualizer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-chat-background, #1e1e2e);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.diff-visualizer-overlay.active { opacity: 1; }
+
+.diff-visualizer-overlay-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--color-panel, rgba(30, 30, 46, 0.95));
+  border-bottom: 1px solid var(--color-border, rgba(255, 255, 255, 0.12));
+  flex-shrink: 0;
+}
+.diff-visualizer-overlay-bar .diff-overlay-toolbar {
+  border-bottom: none;
+  background: transparent;
+  padding: 0;
+  flex: 1;
+}
+
+.diff-visualizer-overlay-body {
+  flex: 1;
+  overflow: auto;
+  padding: 16px;
+}
+.diff-visualizer-overlay-body .diff-visualizer-rendered { font-size: 13px; }
 </style>
 </body>
 </html>

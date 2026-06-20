@@ -1,5 +1,5 @@
 name: diff_visualizer
-version: "0.1.0"
+version: "0.1.1"
 description: |
   Renders unified-diff fenced code blocks as interactive, toggleable
   (line-by-line / side-by-side) visual diffs in the chat UI. Includes a skill
