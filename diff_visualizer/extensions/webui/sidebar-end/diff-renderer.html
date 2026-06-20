@@ -3,35 +3,66 @@
 <body>
 <div style="display:none;"></div>
 
-<script type="module">
-import { html as diff2htmlHtml } from 'https://cdn.jsdelivr.net/npm/diff2html@3.4.51/+esm';
+<script>
+// diff2html is loaded from its UMD bundle (exposes a global `Diff2Html`).
+// NOTE: the jsDelivr `/+esm` build is NOT used — its ESM transform mishandles
+// diff2html's hogan.js template dependency and throws at import time
+// ("n.Template is not a constructor"). The UMD bundle is the reliable browser path.
+const DIFF2HTML_JS = 'https://cdn.jsdelivr.net/npm/diff2html@3.4.51/bundles/js/diff2html.min.js';
+const DIFF2HTML_CSS = 'https://cdn.jsdelivr.net/npm/diff2html@3.4.51/bundles/css/diff2html.min.css';
 
-// diff2html ships its own stylesheet; inject it once from the CDN.
+// Inject diff2html's stylesheet once.
 (function injectDiff2HtmlCss() {
   if (document.getElementById('diff2html-css')) return;
   const link = document.createElement('link');
   link.id = 'diff2html-css';
   link.rel = 'stylesheet';
-  link.href = 'https://cdn.jsdelivr.net/npm/diff2html@3.4.51/bundles/css/diff2html.min.css';
+  link.href = DIFF2HTML_CSS;
   document.head.appendChild(link);
 })();
+
+// Lazily load the UMD bundle; resolves once window.Diff2Html.html is available.
+let _diff2htmlReady = null;
+function diff2htmlReady() {
+  if (window.Diff2Html && typeof window.Diff2Html.html === 'function') return Promise.resolve();
+  if (_diff2htmlReady) return _diff2htmlReady;
+  _diff2htmlReady = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = DIFF2HTML_JS;
+    s.onload = () => {
+      if (window.Diff2Html && typeof window.Diff2Html.html === 'function') resolve();
+      else reject(new Error('diff2html loaded but global missing'));
+    };
+    s.onerror = () => reject(new Error('diff2html script failed to load'));
+    document.head.appendChild(s);
+  });
+  return _diff2htmlReady;
+}
 
 let renderCounter = 0;
 
 function renderHtmlFor(source, format) {
-  return diff2htmlHtml(source, {
+  return window.Diff2Html.html(source, {
     drawFileList: false,
     matching: 'lines',
     outputFormat: format, // 'line-by-line' | 'side-by-side'
   });
 }
 
-function renderDiffBlock(codeEl) {
+async function renderDiffBlock(codeEl) {
   // Mark processed immediately to avoid re-entry from the observer.
   codeEl.setAttribute('data-diff-processed', 'true');
 
   const source = codeEl.textContent.replace(/\s+$/, '');
   if (!source) return;
+
+  // CDN load failed (air-gapped / strict CSP) → leave the raw block readable.
+  try {
+    await diff2htmlReady();
+  } catch {
+    codeEl.removeAttribute('data-diff-processed');
+    return;
+  }
 
   renderCounter++;
 
