@@ -1,0 +1,6 @@
+plugin_dir: usr/plugins/diff_visualizer
+display_name: DiffVisualizer
+# If the plugin has agent-driven behaviour needing an e2e seam, enable it here:
+# e2e_pod_env:
+#   A0_DIFF_VISUALIZER_TEST_PROBE: "1"
+devkit_major: 2
