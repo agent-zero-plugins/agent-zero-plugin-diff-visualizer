@@ -116,7 +116,7 @@ Background:
   And the inline container must survive each close
 
 Scenario: Close via the close button (E2E-7)
-  # → BEH-5a
+  # → BEH-5, BEH-5a
   When I click .diff-overlay-close
   Then the overlay count goes to 0
   And the inline .diff-visualizer-container is still visible
@@ -177,7 +177,7 @@ Background:
   And a pageerror listener is attached to prove no uncaught crash
 
 Scenario: CDN unreachable → raw pre>code stays readable, marker cleared, no crash (E2E-12)
-  # → BEH-3a, EC-1
+  # → BEH-3, BEH-3a, EC-1
   Given requests to cdn.jsdelivr.net are aborted before injection
   When a valid diff block is injected
   Then .diff-visualizer-container count is 0 (no swap)
