@@ -14,7 +14,7 @@ import types
 
 _HOOK = (
     pathlib.Path(__file__).resolve().parents[1]
-    / "diff_visualizer" / "extensions" / "python" / "_functions" / "helpers"
+    / "usr" / "plugins" / "diff_visualizer" / "extensions" / "python" / "_functions" / "helpers"
     / "prompt_fragments" / "get_prompt_fragments" / "end" / "_50_publish_diff_nudge.py"
 )
 
