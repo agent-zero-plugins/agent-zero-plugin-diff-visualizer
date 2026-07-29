@@ -1,114 +1,113 @@
-# agent-zero-new-plugin-template
+# DiffVisualizer — visual diffs in Agent Zero chat
 
-GitHub template for new agent-zero plugin source repos in the
-[`agent-zero-plugins`](https://github.com/agent-zero-plugins) org.
+Renders unified-diff fenced code blocks as **side-by-side visual diffs** directly in the
+Agent Zero chat UI — with a fullscreen maximize view, a copy-raw-source button, and
+theme-aware styling. It also ships an agent **skill** that teaches the agent to emit
+valid unified diffs, and a **system-prompt nudge** so the agent reaches for a diff
+whenever it proposes edits, shows uncommitted changes, or compares before/after.
 
-A repo cloned from this template ships **skills-ready** from the first
-commit: the shared skills library, the plugin-development testkit, the
-manifest contract, and IDE integrations are all wired up. You replace
-the `my_plugin/` placeholder with your plugin's source, author your
-tests, package the zip, and PR it into
-[`agent-zero-vendor-plugins`](https://github.com/agent-zero-plugins/agent-zero-vendor-plugins).
+Reviewing a proposed change in prose is slow; reviewing it as a rendered diff is
+instant. That's the whole plugin.
 
-## Quick start
+## What it looks like
 
-```bash
-# 1. Create a new repo from this template
-gh repo create agent-zero-plugins/agent-zero-plugin-<your-name> \
-  --template agent-zero-plugins/agent-zero-new-plugin-template \
-  --private \
-  --clone
-cd agent-zero-plugin-<your-name>
+Inline render in chat (side-by-side, per-file):
 
-# 2. Initialise the .skills submodule + link everything
-git submodule update --init -- .skills
-make link-all
+![Inline visual diff](docs/diff-inline.png)
 
-# 3. Rename the placeholder plugin dir to your plugin's name
-git mv my_plugin <your-name>
+Maximized fullscreen review (Esc / backdrop / ✕ to close):
 
-# 4. Update PLUGIN_NAME in the Makefile + name fields in
-#    <your-name>/plugin.yaml, <your-name>/meta.yaml, tests/conftest.py,
-#    and pyproject.toml. Then commit + push.
-```
+![Maximized diff overlay](docs/diff-maximized.png)
 
-After `make link-all`, the repo has:
+## Features
 
-| Path | What it is |
+| Feature | Detail |
 |---|---|
-| `.skills/` | Submodule → `agent-zero-plugins-skills` (24 skills) |
-| `tests/_testkit/` | Relative symlink → `.skills/vendor/a0-plugin-testkit/` |
-| `.claude/skills/`, `.github/skills/`, `.antigravity/skills/` | Skill symlinks per IDE (24 × 3) |
-| `.claude/commands/`, `.github/prompts/` | Slash-command prompts (when shared-assets/prompts/ has content) |
-| `.claude/rules/`, `.github/instructions/` | Path-scoped IDE rules (when shared-assets/instructions/ has content) |
-| `.vscode/mcp.json`, `.mcp.json` | Merged MCP server configs |
-| `.github/workflows/skills-sync.yml` | Nightly auto-sync (bumps `.skills`, relinks, opens PR) |
-| `my_plugin/` | Placeholder plugin source — rename this |
-| `tests/` | Smoke test scaffold using `a0_plugin_testkit` |
-| `pyproject.toml` | pytest + ruff + mypy config, with `tests/_testkit/src` on `pythonpath` |
-| `Makefile` | Delegates to `.skills/Makefile`; adds `plugin-zip`, `plugin-info`, `plugin-clean` |
+| Auto-render | Any ` ```diff ` fence in chat becomes a visual diff (MutationObserver, debounced) |
+| Side-by-side view | diff2html `side-by-side` output, line-matched |
+| Multi-file fences | One fence containing several `diff --git` sections renders per-file |
+| Maximize | Fullscreen overlay re-render at larger type; single-overlay invariant |
+| Copy raw source | Copies the original diff text (never the rendered HTML) |
+| Graceful fallback | CDN unreachable / malformed diff / empty block → the raw code block stays readable, nothing is swallowed |
+| Theme-aware | Consumes A0's `--color-*` custom properties with sane fallbacks |
+| Agent skill | `skills/diff/SKILL.md` — unified-diff anatomy, capture recipes, pitfalls |
+| Behaviour nudge | System-prompt extension steering the agent toward diff output |
 
-## Skills you get out of the box
+## Architecture
 
-The `.skills` submodule provides 24 skills covering everything you need
-for plugin development — load any of them in your IDE:
-
-| Group | Skill | When |
-|---|---|---|
-| `plugins/` | `plugin-manifest-contract` | Before you write any code — the rules the gate's CI enforces |
-| `plugins/` | `author-plugin-from-template` | Using this very template |
-| `plugins/` | `contribute-plugin-to-gate` | Once the plugin is built — zip + PR to the gate |
-| `plugins/` | `consume-plugin-in-env` | Operator-side wiring after the gate publishes |
-| `plugins/` | `rotate-plugin-credentials` | Refresh secrets without redeploying |
-| `plugins/` | `troubleshoot-plugin-deployment` | When something fails to load |
-| `plugins/` | `curate-vendor-plugins-gate` | Maintainer's view of incoming PRs |
-| `a0/` | `a0-plugin-router` | Entry point — routes to specialist a0 skills |
-| `a0/` | `a0-create-plugin` | A0 framework's plugin authoring conventions |
-| `a0/` | `a0-debug-plugin` | A0's diagnostic recipes |
-| `a0/` | `a0-manage-plugin` | Plugin Hub, install/update/uninstall |
-| `a0/` | `a0-review-plugin` | Audit before contributing |
-| `a0/` | `a0-contribute-plugin` | Community Plugin Index workflow |
-| `a0/` | `a0-plugin-testkit` | Test harness reference + assertion catalogue |
-| `a0/` | `a0-development` | Broader A0 framework dev |
-| `org/` | `bootstrap-plugins-repo` | What this template implements |
-| `org/` | `plugins-org-issue-management` | Where issues go across plugins-org repos |
-| `meta-skills/` | `manage-skills` / `manage-prompts` / etc. | Operate the skills library itself |
-
-## Step-by-step authoring flow
-
-1. **Pick a shape**. Read [`a0-plugin-router`](.claude/skills/a0-plugin-router/SKILL.md) and decide whether your plugin is a tool, extension, or hook.
-2. **Read the contract**. [`plugin-manifest-contract`](.claude/skills/plugin-manifest-contract/SKILL.md) lists the static checks the gate enforces. Internalise them before writing — retrofitting is annoying.
-3. **Fill in the placeholder**. Rename `my_plugin/` and update `name:` / `version:` / `description:` in `plugin.yaml` + `meta.yaml`. Update `PLUGIN_NAME` in `Makefile`. Update the plugin dir name in `tests/conftest.py`.
-4. **Implement**. Add tools / extensions / hooks to `<your-name>/__init__.py`. Use `os.getenv()` for any credentials (never `default_config.yaml`, never `<input type="password">`).
-5. **Test**. `pytest` runs the smoke test out of the box. Add testkit assertions per the [`a0-plugin-testkit`](.claude/skills/a0-plugin-testkit/SKILL.md) skill.
-6. **Package**. `make plugin-zip` produces `dist/<your-name>-<version>.zip`.
-7. **PR to the gate**. Drop the zip + `<your-name>.meta.yaml` into `agent-zero-vendor-plugins/plugins/`, open a PR. Follow [`contribute-plugin-to-gate`](.claude/skills/contribute-plugin-to-gate/SKILL.md).
-
-## Keeping the skills submodule fresh
-
-The `.github/workflows/skills-sync.yml` workflow installed by
-`make link-workflows` runs nightly at 03:00 UTC. It bumps the `.skills`
-submodule to the latest `main`, re-runs `link-all`, and opens a PR with
-auto-merge enabled.
-
-For an on-demand refresh:
-
-```bash
-make update-skills
-git commit -m 'chore: update skills submodule'
-git push
+```mermaid
+flowchart TD
+    subgraph Agent side
+        N[system_prompt extension\n_15_diff_nudge.py] -->|nudges| A[Agent emits ```diff fence]
+        P[prompt_fragments publisher\n_50_publish_diff_nudge.py] -->|enumerable nudge| H[non-native harnesses]
+        S[skills/diff/SKILL.md] -->|syntax reference| A
+    end
+    subgraph Chat UI - sidebar-end extension
+        A -->|markdown renders| C[pre > code.language-diff]
+        O[MutationObserver + 150ms debounce] --> C
+        C --> G{parsed ≥1 file?\nd2h-file-wrapper}
+        G -->|yes| R[.diff-visualizer-container\nside-by-side diff2html render]
+        G -->|no / CDN down| F[raw block left readable]
+        R --> M[maximize overlay]
+        R --> Y[copy raw source]
+    end
+    D[(diff2html 3.4.51\njsDelivr CDN, lazy + memoised)] --> R
 ```
 
-## Differences from a forked vendor plugin
+## Install
 
-This template is for **org-owned plugin sources** — code you author from
-scratch in the `agent-zero-plugins` org. If you're instead adapting an
-upstream community plugin, the path is different: fork it under
-`agent-zero-plugins/agent-zero-plugin-<name>`, conform it to the
-manifest contract per [`plugin-manifest-contract`](.claude/skills/plugin-manifest-contract/SKILL.md),
-then bootstrap the `.skills` submodule per
-[`bootstrap-plugins-repo`](.claude/skills/bootstrap-plugins-repo/SKILL.md).
+**Plugin Hub (recommended):** open *Settings → Plugins* in Agent Zero, find
+**DiffVisualizer**, click *Install*.
+
+**Manual zip:**
+
+```bash
+git clone https://github.com/agent-zero-plugins/agent-zero-plugin-diff-visualizer
+cd agent-zero-plugin-diff-visualizer
+make package                       # → dist/diff_visualizer.zip
+# Then: A0 Settings → Plugins → Install from file → pick the zip
+```
+
+Enable the plugin after installing (it is store-gated, not always-enabled).
+
+## Configuration
+
+None. The plugin has no configurable options, no secrets, and no environment
+variables (`default_config.yaml` is intentionally empty; `meta.yaml` declares
+`env: []`).
+
+> **Air-gapped note:** the renderer lazy-loads `diff2html@3.4.51` from jsDelivr. If the
+> CDN is unreachable (offline / strict CSP), diff blocks simply stay as readable plain
+> code — no crash, no data loss.
+
+## Development
+
+Repo layout follows the org-canonical devkit standard: plugin source under
+`usr/plugins/diff_visualizer/`, devkit vendored at `tests/_testkit/` (private submodule).
+
+```bash
+git submodule update --init --recursive   # devkit + nested .agent-zero
+make verify                               # Tier-1 static BDD gates (bdd-lint)
+make package                              # build dist/diff_visualizer.zip
+/opt/venv/bin/python -m pytest tests/ -v  # L1 component suite (7 tests)
+make e2e                                  # full BDD e2e in the nested-A0 harness
+```
+
+The e2e harness boots a **nested Agent Zero** via rootless podman, installs the built
+zip, runs a seam-off *red-proof* (the suite must fail without the plugin), then runs the
+BDD features in `tests/e2e/features/` (`playwright-bdd`). Specs assert **end state**
+(rendered containers, overlay presence/absence), never transient markers.
+
+Behaviour truth lives in `docs/spec/behaviour-spec.md` (BEH-1…9) — feature scenarios
+trace to those IDs.
+
+## Tests
+
+| Layer | Where | What |
+|---|---|---|
+| L1 component | `tests/test_diff_visualizer.py`, `tests/test_smoke.py`, `tests/test_publish_nudge.py` | surface validity, stray folders, dead hooks, manifest sanity, nudge publisher |
+| L3 BDD e2e | `tests/e2e/features/*.feature` + `tests/e2e/steps/` | render, toolbar, maximize, 3 close paths, copy, multi-file, malformed fallback, non-diff negative |
 
 ## License
 
-Apache-2.0.
+Apache-2.0 — see [LICENSE](LICENSE).

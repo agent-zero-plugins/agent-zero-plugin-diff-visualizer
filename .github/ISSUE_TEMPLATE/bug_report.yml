@@ -1,0 +1,47 @@
+name: Bug report
+description: A diff misrendered, the overlay misbehaved, or the plugin broke something
+labels: ["type: bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you see, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: raw-diff
+    attributes:
+      label: Raw diff text
+      description: Paste the exact fence content that misrendered (the single most useful repro artifact).
+      render: diff
+    validations:
+      required: false
+  - type: input
+    id: a0-version
+    attributes:
+      label: Agent Zero version
+    validations:
+      required: true
+  - type: input
+    id: plugin-version
+    attributes:
+      label: Plugin version
+      description: From Settings → Plugins, or usr/plugins/diff_visualizer/plugin.yaml
+    validations:
+      required: true
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Network environment
+      options:
+        - Normal (CDN reachable)
+        - Air-gapped / strict CSP (CDN blocked)
+        - Unsure
+    validations:
+      required: true
+  - type: textarea
+    id: console
+    attributes:
+      label: Browser console output
+      description: Any errors in the devtools console when the block rendered (or failed to).
