@@ -1,0 +1,45 @@
+name: unit
+# Python unit suite (publisher hook + existing plugin tests).
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      # Canonical pattern mirrored from the reusable plugin-e2e workflow:
+      # 1) checkout the repo with the DEFAULT token (the sync App cannot read
+      #    this repo — feeding its token to checkout fails 'Repository not
+      #    found', observed on run 30449937662);
+      # 2) init the PRIVATE testkit submodule with an App token via extraheader
+      #    (default GITHUB_TOKEN cannot clone it — observed on run 30443143270);
+      #    --recursive also pulls the testkit's nested public .agent-zero,
+      #    which the L1 surface-validation tests read.
+      - id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1  # v3.2.0
+        with:
+          client-id: ${{ secrets.SKILLS_SYNC_APP_CLIENT_ID }}
+          private-key: ${{ secrets.SKILLS_SYNC_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Init testkit submodule (App token, recursive)
+        env:
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          AUTH=$(printf 'x-access-token:%s' "$APP_TOKEN" | base64 -w0)
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $AUTH" \
+            submodule update --init --recursive tests/_testkit
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Link testkit (creates tests/_testkit symlink)
+        run: make link-testkit || true
+      - name: Install test deps
+        run: python -m pip install --upgrade pip pytest pytest-asyncio pyyaml
+      - name: Run unit suite
+        run: python -m pytest tests -q
