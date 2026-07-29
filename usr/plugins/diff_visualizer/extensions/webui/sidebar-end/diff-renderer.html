@@ -138,8 +138,11 @@ async function renderDiffBlock(codeEl) {
     rendered = '';
   }
 
-  // Empty/failed render → leave the original block untouched (still readable).
-  if (!rendered || !rendered.includes('d2h-wrapper')) {
+  // Empty/failed/parse-less render → leave the original block untouched (still
+  // readable). diff2html emits an outer d2h-wrapper even for unparseable text
+  // (zero files), so gate on d2h-file-wrapper — present only when at least one
+  // file actually parsed. Prevents swapping readable text for an EMPTY container.
+  if (!rendered || !rendered.includes('d2h-file-wrapper')) {
     codeEl.removeAttribute('data-diff-processed');
     return;
   }

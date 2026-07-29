@@ -1,6 +1,6 @@
 title: "DiffVisualizer"
 name: diff_visualizer
-version: "0.1.3"
+version: "0.1.4"
 description: |
   Renders unified-diff fenced code blocks as side-by-side visual diffs in the
   chat UI, with a maximize view for reviewing large diffs. Includes a skill that
