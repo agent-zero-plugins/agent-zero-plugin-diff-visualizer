@@ -12,8 +12,13 @@ import pytest
 
 @pytest.fixture(scope="session")
 def plugin_dir() -> Path:
-    """Path to this plugin's source directory."""
-    return Path(__file__).resolve().parent.parent / "diff_visualizer"
+    """Path to this plugin's source directory (canonical devkit layout)."""
+    return (
+        Path(__file__).resolve().parent.parent
+        / "usr"
+        / "plugins"
+        / "diff_visualizer"
+    )
 
 
 @pytest.fixture(scope="session")
