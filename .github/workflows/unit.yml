@@ -10,9 +10,19 @@ jobs:
   pytest:
     runs-on: ubuntu-latest
     steps:
+      # The testkit submodule is PRIVATE: the default GITHUB_TOKEN cannot clone
+      # it (observed: 'Repository not found' → 10s failure). Mint an App token
+      # from the shared sync App (same secrets devkit-sync.yml uses).
+      - uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: ${{ secrets.SKILLS_SYNC_APP_CLIENT_ID }}
+          private-key: ${{ secrets.SKILLS_SYNC_APP_PRIVATE_KEY }}
+          owner: agent-zero-plugins
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+          token: ${{ steps.app-token.outputs.token }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
