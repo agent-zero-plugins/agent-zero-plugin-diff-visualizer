@@ -1,0 +1,11 @@
+version: 2
+updates:
+  # CI actions (unit.yml + caller workflows). The devkit-shipped callers are
+  # synced from the devkit repo; bumps here surface as normal PRs for review.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    labels: ["type: dependencies"]
+  # Note: the diff2html CDN pin in the renderer HTML is intentionally NOT
+  # automated — bumping it is a reviewed code change (see SECURITY.md).
