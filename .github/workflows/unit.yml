@@ -24,7 +24,7 @@ jobs:
           client-id: ${{ secrets.SKILLS_SYNC_APP_CLIENT_ID }}
           private-key: ${{ secrets.SKILLS_SYNC_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: false
       - name: Init testkit submodule (App token, recursive)
