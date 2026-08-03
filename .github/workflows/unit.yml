@@ -34,7 +34,7 @@ jobs:
           AUTH=$(printf 'x-access-token:%s' "$APP_TOKEN" | base64 -w0)
           git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $AUTH" \
             submodule update --init --recursive tests/_testkit
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Link testkit (creates tests/_testkit symlink)
