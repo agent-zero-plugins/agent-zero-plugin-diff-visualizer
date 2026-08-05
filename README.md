@@ -60,6 +60,44 @@ flowchart TD
     D[(diff2html 3.4.51\njsDelivr CDN, lazy + memoised)] --> R
 ```
 
+## Usage
+
+Every behaviour below is covered by a BDD scenario in [`tests/e2e/features/`](tests/e2e/features/),
+and [`docs/BEHAVIOUR.md`](docs/BEHAVIOUR.md) shows each one as a screenshot captured from a passing
+run — so what you read here is what CI proves on every push.
+
+### Nothing to drive
+
+There is no button to press and no mode to switch on. Whenever a message contains a fenced
+` ```diff ` block, it is replaced in place with a side-by-side visual diff. Ask the agent for a diff,
+paste one in yourself, or have a tool emit one — it renders either way.
+
+Multi-file diffs render as one visual diff containing both files, so a patch that touches several
+files reads as a single reviewable unit rather than fragments.
+
+### Reviewing a large diff
+
+Hover a rendered diff for its toolbar:
+
+- **Maximize** opens a single fullscreen overlay for reading a long patch without the chat column
+  squeezing it. Close it with the ✕, a backdrop click, or **Escape** — all three are asserted, and so
+  is the fact that the inline diff survives the overlay closing.
+- **Copy** puts the **raw diff text** on the clipboard, not the rendered HTML. You can paste it
+  straight into `git apply`.
+
+### When the input is not a clean diff
+
+Two failure modes are handled deliberately, because silently mangling text is worse than not
+rendering it:
+
+- **Malformed diff text** falls back to the readable plain code block. You still see the content.
+- **A non-diff code fence is left completely untouched.** A ` ```python ` block stays a Python block.
+  The plugin only claims fences it can actually render.
+
+Both are asserted scenarios rather than intentions.
+
+---
+
 ## Install
 
 **Plugin Hub (recommended):** open *Settings → Plugins* in Agent Zero, find
