@@ -34,7 +34,7 @@ screenshots:
 
 ## Thumbnail
 
-Copy `usr/plugins/diff_visualizer/webui/thumbnail.png` (256×256 square, ~1.5 KB — well
+Copy `webui/thumbnail.png` (256×256 square, ~1.5 KB — well
 under the 20 KB limit) into the index folder as `thumbnail.png`.
 
 ## Pre-submission checklist (flip-time)
